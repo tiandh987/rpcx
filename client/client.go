@@ -98,9 +98,12 @@ type RPCClient interface {
 }
 
 // Client represents a RPC client.
+// Client 代表一个 RPC 客户端
 type Client struct {
+	// 用于创建客户端的所有选项
 	option Option
 
+	// Conn 代表客户端与服务器之前的连接。
 	Conn net.Conn
 	r    *bufio.Reader
 	// w    *bufio.Writer
@@ -112,8 +115,10 @@ type Client struct {
 	shutdown     bool // server has told us to stop
 	pluginClosed bool // the plugin has been called
 
+	// Plugins 包含了客户端启用的插件。
 	Plugins PluginContainer
 
+	// 双向模式, 用于接收服务端推送数据的 chan
 	ServerMessageChan chan<- *protocol.Message
 }
 
@@ -125,53 +130,76 @@ func NewClient(option Option) *Client {
 }
 
 // RemoteAddr returns the remote address.
+// 返回远端地址
 func (client *Client) RemoteAddr() string {
 	return client.Conn.RemoteAddr().String()
 }
 
 // GetConn returns the underlying conn.
+// 返回底层的 net.Conn
 func (client *Client) GetConn() net.Conn {
 	return client.Conn
 }
 
 // Option contains all options for creating clients.
+// Option 包含用于创建客户端的所有选项。
 type Option struct {
 	// Group is used to select the services in the same group. Services set group info in their meta.
 	// If it is empty, clients will ignore group.
+	//
+	// Group 用于选择同一组中的服务。 服务在其元中设置组信息。
+	// 如果为空，客户端将忽略组。
 	Group string
 
 	// Retries retries to send
+	// 重试发送次数
 	Retries int
 
 	// TLSConfig for tcp and quic
+	// 用于 tcp 和 quic
 	TLSConfig *tls.Config
+
 	// kcp.BlockCrypt
 	Block interface{}
+
 	// RPCPath for http connection
 	RPCPath string
+
 	// ConnectTimeout sets timeout for dialing
+	// 设置拨号超时
 	ConnectTimeout time.Duration
+
 	// IdleTimeout sets max idle time for underlying net.Conns
+	// 设置底层 net.Conn 的最大空闲时间
 	IdleTimeout time.Duration
 
-	// BackupLatency is used for Failbackup mode. rpcx will sends another request if the first response doesn't return in BackupLatency time.
+	// BackupLatency is used for Failbackup mode.
+	// rpcx will sends another request if the first response doesn't return in BackupLatency time.
+	// BackupLatency 用于故障备份模式。 如果第一个响应在 BackupLatency 时间内没有返回，rpcx 将发送另一个请求。
 	BackupLatency time.Duration
 
 	// Breaker is used to config CircuitBreaker
 	GenBreaker func() Breaker
 
+	// 编解码器
 	SerializeType protocol.SerializeType
+	// 压缩类型
 	CompressType  protocol.CompressType
 
 	// send heartbeat message to service and check responses
+	// 向服务发送心跳消息并检查响应
 	Heartbeat bool
+
 	// interval for heartbeat
+	// 心跳间隔
 	HeartbeatInterval   time.Duration
 	MaxWaitForHeartbeat time.Duration
 
 	// TCPKeepAlive, if it is zero we don't set keepalive
 	TCPKeepAlivePeriod time.Duration
+
 	// bidirectional mode, if true serverMessageChan will block to wait message for consume. default false.
+	// 双向模式，如果为 true serverMessageChan 将阻塞等待消息消费。 默认 false。
 	BidirectionalBlock bool
 }
 
@@ -199,16 +227,19 @@ func (call *Call) done() {
 }
 
 // RegisterServerMessageChan registers the channel that receives server requests.
+// 注册 channel，用于接收服务端请求
 func (client *Client) RegisterServerMessageChan(ch chan<- *protocol.Message) {
 	client.ServerMessageChan = ch
 }
 
 // UnregisterServerMessageChan removes ServerMessageChan.
+// 移除 ServerMessageChan
 func (client *Client) UnregisterServerMessageChan() {
 	client.ServerMessageChan = nil
 }
 
 // IsClosing client is closing or not.
+// 客户端是否关闭
 func (client *Client) IsClosing() bool {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
@@ -216,6 +247,7 @@ func (client *Client) IsClosing() bool {
 }
 
 // IsShutdown client is shutdown or not.
+// 客户端是否 shutdown
 func (client *Client) IsShutdown() bool {
 	client.mutex.Lock()
 	defer client.mutex.Unlock()
@@ -226,6 +258,10 @@ func (client *Client) IsShutdown() bool {
 // the invocation. The done channel will signal when the call is complete by returning
 // the same Call object. If done is nil, Go will allocate a new channel.
 // If non-nil, done must be buffered or Go will deliberately crash.
+//
+// Go 异步调用函数。 它返回表示调用的 Call 结构。
+// done 通道将通过返回相同的 Call 对象在调用完成时发出信号。
+// 如果 done 为 nil，Go 将分配一个新通道。 如果非 nil，done 必须有缓冲，否则 Go 会故意 panic。
 func (client *Client) Go(ctx context.Context, servicePath, serviceMethod string, args interface{}, reply interface{}, done chan *Call) *Call {
 	call := new(Call)
 	call.ServicePath = servicePath
@@ -262,6 +298,7 @@ func (client *Client) Go(ctx context.Context, servicePath, serviceMethod string,
 }
 
 // Call invokes the named function, waits for it to complete, and returns its error status.
+// Call 调用命名函数，等待它完成，并返回其错误状态。
 func (client *Client) Call(ctx context.Context, servicePath, serviceMethod string, args interface{}, reply interface{}) error {
 	return client.call(ctx, servicePath, serviceMethod, args, reply)
 }
@@ -309,6 +346,7 @@ func (client *Client) call(ctx context.Context, servicePath, serviceMethod strin
 }
 
 // SendRaw sends raw messages. You don't care args and replies.
+// SendRaw 发送原始消息。 你不关心参数和回复。
 func (client *Client) SendRaw(ctx context.Context, r *protocol.Message) (map[string]string, []byte, error) {
 	ctx = context.WithValue(ctx, seqKey{}, r.Seq())
 
